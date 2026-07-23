@@ -20,9 +20,6 @@ func (s *AlimtalkService) Send(req AlimtalkRequest) error {
 	if req.ReplaceSms == "" {
 		req.ReplaceSms = "N"
 	}
-	if req.Buttons == nil {
-		req.Buttons = []any{}
-	}
 	req.KakaoSenderKey = s.kakaoSenderKey
 	req.SenderKey = s.smsSenderKey
 

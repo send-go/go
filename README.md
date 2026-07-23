@@ -315,7 +315,7 @@ if err != nil {
 | `KakaoSenderKey` | `string` | 선택 | `""` | 카카오 발신프로필 키 |
 | `SmsSenderKey` | `string` | 선택 | `""` | SMS 발신자 키 |
 | `ApiVersion` | `string` | 선택 | `"v2"` | API 버전 (`v1` \| `v2`) |
-| `BaseURL` | `string` | 선택 | `"https://api.sendgo.io"` | API 기본 URL |
+| `BaseURL` | `string` | 선택 | `"https://sendgo.io"` | API 기본 URL |
 
 ---
 

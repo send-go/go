@@ -35,7 +35,7 @@ func New(cfg Config) (*Client, error) {
 		cfg.APIVersion = "v1"
 	}
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://api.sendgo.io"
+		cfg.BaseURL = "https://sendgo.io"
 	}
 
 	tm := newTokenManager(cfg.BaseURL, cfg.AccessKey, cfg.SecretKey, cfg.APIVersion)
