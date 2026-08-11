@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 )
 
@@ -27,20 +28,51 @@ func newHTTPClient(tm *tokenManager, baseURL, apiVersion string) *httpClient {
 }
 
 func (c *httpClient) post(path string, body any) (map[string]any, error) {
-	return c.doPost(path, body, false)
+	return c.do(http.MethodPost, path, body, nil, false)
 }
 
-func (c *httpClient) doPost(path string, body any, isRetry bool) (map[string]any, error) {
+// get performs a GET request, optionally with a query string. Used by the
+// campaign lookup endpoints, which have no request body.
+func (c *httpClient) get(path string, query map[string]string) (map[string]any, error) {
+	return c.do(http.MethodGet, path, nil, query, false)
+}
+
+// delete performs a DELETE request. `do` already drives the verb, so this only
+// needs to omit the body.
+func (c *httpClient) delete(path string) (map[string]any, error) {
+	return c.do(http.MethodDelete, path, nil, nil, false)
+}
+
+func (c *httpClient) do(method, path string, body any, query map[string]string, isRetry bool) (map[string]any, error) {
 	token, err := c.tokenMgr.getToken()
 	if err != nil {
 		return nil, err
 	}
 
-	payload, _ := json.Marshal(body)
 	url := fmt.Sprintf("%s/api/%s/%s", c.baseURL, c.apiVersion, path)
 
-	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
+	if len(query) > 0 {
+		values := neturl.Values{}
+		for key, value := range query {
+			if value != "" {
+				values.Set(key, value)
+			}
+		}
+		if encoded := values.Encode(); encoded != "" {
+			url += "?" + encoded
+		}
+	}
+
+	var reader io.Reader
+	if body != nil {
+		payload, _ := json.Marshal(body)
+		reader = bytes.NewReader(payload)
+	}
+
+	req, _ := http.NewRequest(method, url, reader)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("Authorization", c.bearerAuth(token))
 
 	resp, err := c.hc.Do(req)
@@ -63,7 +95,7 @@ func (c *httpClient) doPost(path string, body any, isRetry bool) (map[string]any
 
 		if !isRetry && c.tokenMgr.shouldRefresh(resp.StatusCode, errorCode) {
 			c.tokenMgr.invalidate()
-			return c.doPost(path, body, true)
+			return c.do(method, path, body, query, true)
 		}
 		return nil, newSendgoError(resp.StatusCode, responseBody, endpoint, c.apiVersion)
 	}

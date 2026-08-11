@@ -1,6 +1,9 @@
 package sendgo
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // Contact는 수신자 정보입니다.
 type Contact struct {
@@ -73,6 +76,57 @@ type FriendtalkRequest struct {
 	SenderKey      string `json:"senderKey,omitempty"`
 }
 
+// BrandMessageRequest는 카카오 브랜드메시지 전송 요청입니다.
+//
+// 브랜드메시지는 친구톡의 후속 채널로, MessageType은 친구톡 코드
+// (FT/FI/FW/FL/FC/FM/FP/FA)를 그대로 넘기며 브랜드메시지 코드
+// (BT/BI/BW/BL/BC/BM/BP/BA) 변환은 서버가 처리합니다.
+//
+// Targeting은 M(채널 친구) / N(비친구) / I(전체) / F(동보)이며,
+// F는 수신자 목록을 카카오 측에서 확장하므로 Contacts를 넘기지 않습니다.
+type BrandMessageRequest struct {
+	At                 *string  `json:"at"`
+	ScheduleType       string   `json:"scheduleType"`
+	Targeting          string   `json:"targeting"`
+	MessageType        string   `json:"messageType"`
+	FriendTemplateUUID string   `json:"friendTemplateUuid"`
+	Content            *string  `json:"content"`
+	Buttons            []any    `json:"buttons"`
+	ImageURL           *string  `json:"imageUrl"`
+	ImageLink          *string  `json:"imageLink"`
+	AdFlag             string   `json:"adFlag"`
+	Adult              string   `json:"adult"`
+	PushAlarm          string   `json:"pushAlarm"`
+	Header             *string  `json:"header"`
+	Coupon             any      `json:"coupon"`
+	Item               any      `json:"item"`
+	Commerce           any      `json:"commerce"`
+	List               []any    `json:"list"`
+	Head               any      `json:"head"`
+	Tail               any      `json:"tail"`
+	Video              any      `json:"video"`
+	AdditionalContent  *string  `json:"additionalContent"`
+	FriendGroupKey     *string  `json:"friendGroupKey"`
+	ReplaceSms         string   `json:"replaceSms"`
+	SmsSubject         *string  `json:"smsSubject"`
+	SmsContent         *string  `json:"smsContent"`
+	RejectServiceID    *string  `json:"rejectServiceId"`
+	Webhooks           []string `json:"webhooks"`
+	// Contacts는 Targeting이 F(동보)일 때 생략됩니다.
+	Contacts []Contact `json:"contacts,omitempty"`
+	// 자동 설정됨
+	KakaoSenderKey string `json:"kakaoSenderKey,omitempty"`
+	SenderKey      string `json:"senderKey,omitempty"`
+}
+
+// BrandMessageListQuery는 브랜드메시지 캠페인 목록 조회 조건입니다.
+// 빈 문자열/0은 전송되지 않고 서버 기본값이 적용됩니다.
+type BrandMessageListQuery struct {
+	From  string
+	To    string
+	Count int
+}
+
 // SmsRequest는 SMS/LMS/MMS 전송 요청입니다.
 type SmsRequest struct {
 	CampaignType string    `json:"campaignType"`
@@ -95,4 +149,55 @@ type Config struct {
 	SmsSenderKey   string
 	APIVersion     string // "v1" | "v2" (기본값: "v1")
 	BaseURL        string // 기본값: "https://sendgo.io"
+}
+
+// ShortURLRequest는 짧은 URL 생성 요청입니다.
+type ShortURLRequest struct {
+	// TargetURL은 줄일 원본 URL입니다. http/https 만 허용됩니다.
+	TargetURL string `json:"targetUrl"`
+	// Title은 관리 화면에서 구분하기 위한 이름입니다.
+	Title string `json:"title,omitempty"`
+	// ExpiresAt 이후에는 리다이렉트하지 않고 410 Gone 을 반환합니다.
+	ExpiresAt string `json:"expiresAt,omitempty"`
+	// ForceNew가 true면 같은 URL이라도 새 코드를 만듭니다.
+	// 캠페인별로 반응을 분리해 집계할 때 사용합니다.
+	ForceNew bool `json:"forceNew,omitempty"`
+}
+
+// ShortURLListQuery는 짧은 URL 목록 조회 조건입니다.
+type ShortURLListQuery struct {
+	From  string
+	To    string
+	Count int
+}
+
+func (q ShortURLListQuery) toMap() map[string]string {
+	m := map[string]string{}
+	if q.From != "" {
+		m["from"] = q.From
+	}
+	if q.To != "" {
+		m["to"] = q.To
+	}
+	if q.Count > 0 {
+		m["count"] = strconv.Itoa(q.Count)
+	}
+	return m
+}
+
+// ShortURLStatsQuery는 짧은 URL 통계 조회 조건입니다.
+type ShortURLStatsQuery struct {
+	From string
+	To   string
+}
+
+func (q ShortURLStatsQuery) toMap() map[string]string {
+	m := map[string]string{}
+	if q.From != "" {
+		m["from"] = q.From
+	}
+	if q.To != "" {
+		m["to"] = q.To
+	}
+	return m
 }

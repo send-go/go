@@ -21,13 +21,13 @@ const tokenTTL = 50 * time.Minute
 
 // tokenManager는 Sendgo API 토큰을 인메모리 캐시로 관리합니다.
 type tokenManager struct {
-	baseURL     string
-	accessKey   string
-	secretKey   string
-	apiVersion  string
-	mu          sync.Mutex
-	token       string
-	expiresAt   time.Time
+	baseURL    string
+	accessKey  string
+	secretKey  string
+	apiVersion string
+	mu         sync.Mutex
+	token      string
+	expiresAt  time.Time
 }
 
 func newTokenManager(baseURL, accessKey, secretKey, apiVersion string) *tokenManager {

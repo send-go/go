@@ -94,7 +94,7 @@ func main() {
     client.Alimtalk.Send(sendgo.AlimtalkRequest{
         TemplateCode: "PROMO_SUMMER_2026",
         ScheduleType: "SCHEDULED",
-        At:           "2026-07-28 09:00:00",
+        At:           sendgo.String("2026-07-28 09:00:00"),
         Contacts: []sendgo.Contact{
             {Contact: "01012345678", Var1: "여름 한정 50% 할인"},
         },
@@ -104,8 +104,8 @@ func main() {
     client.Alimtalk.Send(sendgo.AlimtalkRequest{
         TemplateCode: "DELIVERY_START_001",
         ReplaceSms:   "Y",
-        SmsSubject:   "[배송 시작 안내]",
-        SmsContent:   "주문하신 상품이 출고되었습니다.\n송장번호: #{var2}",
+        SmsSubject:   sendgo.String("[배송 시작 안내]"),
+        SmsContent:   sendgo.String("주문하신 상품이 출고되었습니다.\n송장번호: #{var2}"),
         Contacts: []sendgo.Contact{
             {Contact: "01012345678", Var1: "ORD-001", Var2: "1234567890"},
         },
@@ -140,6 +140,44 @@ client.Friendtalk.Send(sendgo.FriendtalkRequest{
 
 ---
 
+## 브랜드메시지 사용법
+
+브랜드메시지는 친구톡의 후속 채널입니다. 메시지 타입이 친구톡과 1:1 대응되며
+(`FT`→`BT`, `FI`→`BI`, `FW`→`BW`, `FL`→`BL`, `FC`→`BC`, `FM`→`BM`, `FP`→`BP`, `FA`→`BA`),
+요청에는 **친구톡 코드를 그대로** 넘기고 변환은 서버가 처리합니다.
+
+친구톡과 달리 다음이 가능합니다.
+
+- 채널 친구가 **아닌** 수신자에게 발송 (`targeting: N`)
+- 수신 동의한 **전체 채널 친구 동보** 발송 (`targeting: F`, 수신자 목록 불필요)
+- 리스트·캐러셀·커머스·동영상 등 **템플릿 기반 리치 메시지**
+
+> v2 전용입니다. `FT`/`FI`/`FW`를 채널 친구에게만 보낼 때는 친구톡 API가 더 간단합니다.
+
+```go
+// 단건 발송 — 채널 친구 대상
+_, err := client.BrandMessage.Send(sendgo.BrandMessageRequest{
+    Targeting:          "M",
+    MessageType:        "FL",
+    FriendTemplateUUID: "9cd5460b-6458-4edc-9b11-c26d3013c340",
+    Contacts: []sendgo.Contact{
+        {Contact: "01012345678", Var1: "29,000원"},
+    },
+})
+
+// 동보 발송 — 수신 동의한 전체 채널 친구 (Contacts 불필요)
+_, err = client.BrandMessage.Broadcast(sendgo.BrandMessageRequest{
+    MessageType:        "FW",
+    FriendTemplateUUID: "9cd5460b-6458-4edc-9b11-c26d3013c340",
+})
+
+// 캠페인 조회
+list, err := client.BrandMessage.Campaigns(sendgo.BrandMessageListQuery{Count: 10})
+one, err := client.BrandMessage.Campaign("1f0a6d0e-6b3b-4f0f-9b2f-2f6f6a1b7c11")
+```
+
+---
+
 ## SMS / LMS / MMS 사용법
 
 ```go
@@ -153,7 +191,7 @@ client.SMS.SendSMS(sendgo.SmsRequest{
 
 // LMS
 client.SMS.SendLMS(sendgo.SmsRequest{
-    Subject: "[중요] 서비스 점검 안내",
+    Subject: sendgo.String("[중요] 서비스 점검 안내"),
     Content: "안녕하세요. 서비스 점검이 예정되어 있습니다.\n■ 일시: 2026-07-25 02:00 ~ 06:00",
     Contacts: []sendgo.Contact{
         {Contact: "01012345678"},
@@ -162,7 +200,7 @@ client.SMS.SendLMS(sendgo.SmsRequest{
 
 // MMS
 client.SMS.SendMMS(sendgo.SmsRequest{
-    Subject: "[이벤트] 7월 특가",
+    Subject: sendgo.String("[이벤트] 7월 특가"),
     Content: "이번 달 특가 상품을 확인하세요!",
     Contacts: []sendgo.Contact{
         {Contact: "01011111111"},
@@ -174,7 +212,7 @@ client.SMS.SendMMS(sendgo.SmsRequest{
 client.SMS.SendSMS(sendgo.SmsRequest{
     Content:      "[알림] 예약 미팅을 확인해주세요.",
     ScheduleType: "SCHEDULED",
-    At:           "2026-07-23 08:00:00",
+    At:           sendgo.String("2026-07-23 08:00:00"),
     Contacts: []sendgo.Contact{{Contact: "01012345678"}},
 })
 ```
@@ -305,6 +343,21 @@ if err != nil {
 ```
 
 ---
+
+## 포인터 필드와 `sendgo.String`
+
+`AlimtalkRequest` 의 `At`/`SmsSubject`/`SmsContent` 와 `SmsRequest` 의 `Subject` 는
+"설정하지 않음"(JSON `null`)과 빈 문자열을 구분해야 하므로 `*string` 입니다.
+Go에서는 리터럴의 주소를 얻을 수 없으므로(`&"..."` 는 컴파일 에러) 변수를 따로
+선언하거나 `sendgo.String(...)` 헬퍼를 사용하세요.
+
+```go
+err := client.SMS.SendLMS(sendgo.SmsRequest{
+    Subject:  sendgo.String("[중요] 서비스 점검 안내"),
+    Content:  "...",
+    Contacts: []sendgo.Contact{{Contact: "01012345678"}},
+})
+```
 
 ## 설정 옵션
 

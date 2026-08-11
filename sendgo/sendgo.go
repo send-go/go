@@ -23,7 +23,11 @@ import "fmt"
 type Client struct {
 	Alimtalk   *AlimtalkService
 	Friendtalk *FriendtalkService
-	SMS        *SMSService
+	// BrandMessage는 카카오 브랜드메시지(친구톡의 후속 채널)입니다. v2 전용.
+	BrandMessage *BrandMessageService
+	// ShortURL은 짧은 URL — 링크 단축과 클릭 반응 분석입니다. v2 전용.
+	ShortURL *ShortURLService
+	SMS      *SMSService
 }
 
 // New는 새 Sendgo 클라이언트를 생성합니다.
@@ -42,8 +46,10 @@ func New(cfg Config) (*Client, error) {
 	hc := newHTTPClient(tm, cfg.BaseURL, cfg.APIVersion)
 
 	return &Client{
-		Alimtalk:   newAlimtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
-		Friendtalk: newFriendtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
-		SMS:        newSMSService(hc, cfg.SmsSenderKey),
+		Alimtalk:     newAlimtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		Friendtalk:   newFriendtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		BrandMessage: newBrandMessageService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		ShortURL:     newShortURLService(hc),
+		SMS:          newSMSService(hc, cfg.SmsSenderKey),
 	}, nil
 }

@@ -1,4 +1,4 @@
-module github.com/sendgo-dev/sendgo-go
+module github.com/send-go/go
 
 go 1.22
 
