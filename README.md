@@ -384,6 +384,49 @@ err := client.SMS.SendLMS(sendgo.SmsRequest{
 
 ---
 
+## 짧은 URL
+
+짧은 URL 은 메시지 본문의 링크를 줄이고, 그 링크가 실제로 눌렸는지 집계합니다.
+문자는 바이트 수가 요금과 직결되므로 링크를 줄이면 그만큼 본문을 더 쓸 수 있습니다.
+
+같은 원본 URL 을 다시 줄이면 **기존 링크가 그대로 반환**됩니다. 캠페인별로 반응을
+따로 집계하려면 `forceNew` 로 새 코드를 만드세요.
+
+`deactivate` 는 링크를 삭제하지 않고 리다이렉트만 중지합니다. 이미 발송한 메시지의
+링크를 무효화할 때 쓰며, 누적 통계는 남고 이후 접속은 `410 Gone` 이 됩니다.
+
+```go
+// 짧은 URL 생성 (v2 전용)
+created, err := client.ShortURL.Create(sendgo.ShortURLRequest{
+	TargetURL: "https://example.com/promotions/summer-sale",
+	Title:     "여름 세일 랜딩",
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+code := created["data"].(map[string]any)["code"].(string)
+
+// 반응 통계 — 일별 추이 + 디바이스/유입경로/국가별 분해
+stats, err := client.ShortURL.Stats(code, sendgo.ShortURLStatsQuery{From: "2026-08-01"})
+
+client.ShortURL.List(sendgo.ShortURLListQuery{Count: 10})
+client.ShortURL.Show(code)
+client.ShortURL.Deactivate(code) // 리다이렉트만 중지, 통계는 남는다
+```
+
+`stats` 는 일별 추이(`daily`)와 디바이스(`byDevice`)·유입경로(`byReferer`)·국가(`byCountry`)별
+분해를 반환합니다. 일별 추이는 사전 집계 표에서 읽으므로 클릭이 많아도 응답 시간이 일정합니다.
+
+## 변경 사항
+
+### 1.1.0 (2026-08-11)
+
+- 짧은 URL 추가 — `client.ShortURL`
+- **모듈 경로 수정** — `github.com/sendgo-dev/sendgo-go` → `github.com/send-go/go`. README·문서가 모두 후자를 쓰고 있어 `go get` 이 동작할 수 없었다.
+- `sendgo.String()` 헬퍼 추가. `At`/`SmsSubject`/`SmsContent`/`Subject` 가 `*string` 이라 리터럴을 직접 넘길 수 없었다.
+- `httpClient.delete()` 추가
+
 ## 라이선스
 
 MIT License © 2026 [Sendgo](https://sendgo.io)
