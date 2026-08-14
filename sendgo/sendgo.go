@@ -21,7 +21,8 @@ import "fmt"
 
 // Client는 Sendgo API 클라이언트입니다.
 type Client struct {
-	Alimtalk   *AlimtalkService
+	Alimtalk *AlimtalkService
+	// Deprecated: 친구톡은 2025-12-31 종료. BrandMessage를 사용하세요.
 	Friendtalk *FriendtalkService
 	// BrandMessage는 카카오 브랜드메시지(친구톡의 후속 채널)입니다. v2 전용.
 	BrandMessage *BrandMessageService
