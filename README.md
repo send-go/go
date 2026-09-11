@@ -431,7 +431,299 @@ client.ShortURL.Deactivate(code) // 리다이렉트만 중지, 통계는 남는�
 `stats` 는 일별 추이(`daily`)와 디바이스(`byDevice`)·유입경로(`byReferer`)·국가(`byCountry`)별
 분해를 반환합니다. 일별 추이는 사전 집계 표에서 읽으므로 클릭이 많아도 응답 시간이 일정합니다.
 
+## 관리 API — 채널·템플릿·발신번호 등록 (v2 전용)
+
+발송은 처음부터 API였지만 **등록과 심사는 콘솔에서만** 되던 것들이 있었습니다.
+1.3.0 부터 그 작업도 코드로 처리합니다.
+
+| 서비스 | 하는 일 | 계정 |
+| --- | --- | --- |
+| `client.KakaoSenders` | 카카오 채널 인증·등록·동기화, 브랜드메시지 M/N 신청 | 기업 |
+| `client.NoticeTemplates` | 알림톡 템플릿 CRUD, 검수 요청·취소, 승인 취소, 휴면 해제 | 기업 |
+| `client.BrandTemplates` | 브랜드메시지(구 친구톡) 템플릿 CRUD, 동기화, 가져오기 | 기업 |
+| `client.SenderRegistration` | 발신번호 등록 신청, 중복 확인, 유형 안내 | 개인·기업 |
+| `client.MessageTemplates` | 문자 상용구 템플릿 CRUD | 개인·기업 |
+| `client.KakaoImages` | 카카오 이미지 업로드 — 템플릿용 URL 발급 | 기업 |
+| `client.RejectedNumbers` | 수신거부(080) 번호 조회 | 개인·기업 |
+| `client.Webhook` | 이벤트 웹훅 구독 — 심사 결과 수신 | 개인·기업 |
+
+> **sendgo.io 콘솔에 들어올 일이 없습니다.** 고객의 채널·발신번호·템플릿을
+> 여러분 화면만으로 끝까지 처리할 수 있습니다. 휴대폰 발신번호는 콘솔의 PASS
+> 본인인증 대신 **신분증 사본(`identityDocument`)을 받아 sendgo 운영자가 대신
+> 심사**합니다.
+>
+> 사람이 개입하는 지점은 **카카오 채널 인증번호 하나**뿐이고, 그마저도
+> 여러분 화면에서 입력받으면 됩니다 — 카카오가 관리자 휴대폰으로 직접 보내는
+> 확인이라 없앨 수 없습니다.
+>
+> 심사가 붙는 것들은 **비동기**입니다. 등록 호출이 성공했다는 건 "접수됐다"는
+> 뜻이지 "쓸 수 있다"는 뜻이 아닙니다 — 웹훅을 구독해 결과를 받으세요.
+
+### 카카오 채널 등록
+
+```go
+// 1단계 — 카카오가 관리자 휴대폰으로 인증번호를 SMS 발송한다 (응답에 번호는 없다)
+if _, err := client.KakaoSenders.RequestToken("@my-channel", "01012345678"); err != nil {
+    log.Fatal(err)
+}
+
+// 2단계 — 사람이 받은 인증번호로 발신프로필 생성
+created, err := client.KakaoSenders.Create(sendgo.KakaoSenderCreateRequest{
+    Token:        "123456",
+    YellowID:     "@my-channel",
+    PhoneNumber:  "01012345678",
+    CategoryCode: "001001", // Categories("") 로 조회
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+sender := created["data"].(map[string]any)["sender"].(map[string]any)
+kakaoSenderKey := sender["kakaoSenderKey"].(string)
+
+client.KakaoSenders.Categories("")
+client.KakaoSenders.List()
+client.KakaoSenders.Sync("")               // 전체 상태 동기화 (하루 한 번 권장)
+client.KakaoSenders.Sync(kakaoSenderKey)   // 단건
+```
+
+채널이 카카오 쪽에서 차단되면 발송이 조용히 실패하기 시작합니다. `Sync("")` 를
+주기적으로 돌리고 `block: true` 인 채널을 감시하세요.
+
+### 알림톡 템플릿 등록과 검수
+
+```go
+created, err := client.NoticeTemplates.Create(sendgo.NoticeTemplateRequest{
+    KakaoSenderKey:        kakaoSenderKey,
+    TemplateName:          "주문 접수 안내",
+    TemplateContent:       "#{name}님, 주문 #{orderNo}이 접수되었습니다.",
+    TemplateMessageType:   "BA",   // BA 기본형 / EX 부가정보형 / AD 채널추가형 / MI 복합형
+    TemplateEmphasizeType: "NONE", // NONE / TEXT / ITEM_LIST / IMAGE
+    CategoryCode:          "001001",
+
+    // sendgo 자체 정책 게이트 — 카카오 심사와 별개다
+    MessagePurpose:       "order_delivery",
+    LegalBasis:           "transaction",
+    BenefitOrigin:        "none",
+    ExpiryType:           "none",
+    OptInReviewConfirmed: true,
+    CtaClearConfirmed:    true,
+    PolicyConfirmed:      true,
+})
+
+template := created["data"].(map[string]any)["template"].(map[string]any)
+templateCode := template["templateCode"].(string)
+
+// 검수 요청 — 증빙이 필요하면 파일도 붙인다 (첨부가 있으면 comment 필수)
+client.NoticeTemplates.RequestInspection(templateCode, "", nil)
+
+// 결과는 비동기다. 웹훅이 없으므로 폴링한다
+synced, _ := client.NoticeTemplates.Sync(templateCode)
+status := synced["data"].(map[string]any)["template"].(map[string]any)["inspectionStatus"]
+// REG → REQ → APR / REJ
+```
+
+정책 필드 조합이 본문과 어긋나면 저장 단계에서 `POLICY_VALIDATION_FAILED` 로
+막힙니다. 오류의 `Errors` 에 사유가 한국어로 담기니 그대로 사용자에게 보여
+주면 됩니다. 여기서 걸리는 문안은 **카카오 심사에서도 거의 반려**되므로,
+며칠 기다렸다 반려당하는 것보다 즉시 아는 편이 낫습니다.
+
+```go
+client.NoticeTemplates.List(sendgo.NoticeTemplateListQuery{
+    KakaoSenderKey:   kakaoSenderKey,
+    InspectionStatus: "APR",
+})
+client.NoticeTemplates.Show(templateCode)
+client.NoticeTemplates.Update(templateCode, req)   // 본문이 바뀌면 재검수 필요
+client.NoticeTemplates.CancelInspection(templateCode)
+client.NoticeTemplates.CancelApproval(templateCode)
+client.NoticeTemplates.Release(templateCode)       // 휴면 해제
+client.NoticeTemplates.Delete(templateCode)        // sendgo 목록에서만 삭제된다
+client.NoticeTemplates.Categories("")
+```
+
+이미지 템플릿과 검수 첨부는 multipart 로 나갑니다.
+
+```go
+f, _ := os.Open("banner.jpg")
+defer f.Close()
+
+client.NoticeTemplates.CreateWithImage(req, sendgo.MultipartFile{
+    FileName: "banner.jpg",
+    Content:  f,
+})
+```
+
+> **삭제 동작이 채널마다 다릅니다.** 알림톡 템플릿은 카카오에 삭제 API 가 없어
+> sendgo 목록에서만 빠지고 동기화하면 되살아납니다. 브랜드메시지 템플릿은
+> 카카오 쪽에서도 실제로 삭제됩니다.
+
+### 브랜드메시지 템플릿
+
+```go
+created, err := client.BrandTemplates.Create(sendgo.BrandTemplateRequest{
+    KakaoSenderKey:  kakaoSenderKey,
+    TemplateName:    "여름 세일 안내",
+    TemplateType:    "FI", // FT/FI/FW/FL/FC/FM/FP/FA — 서버가 chatBubbleType 으로 변환
+    TemplateContent: "여름 세일이 시작되었습니다.",
+    ImageURL:        "https://mud-kage.kakao.com/....jpg",
+})
+
+// 동보 발송(targeting="F")에는 변수가 없는 템플릿만 쓸 수 있다
+// created["data"]["template"]["containsVariables"]
+
+client.BrandTemplates.List(sendgo.BrandTemplateListQuery{KakaoSenderKey: kakaoSenderKey})
+client.BrandTemplates.Sync(templateCode)
+client.BrandTemplates.Import(kakaoSenderKey)   // 카카오에 있는 템플릿 가져오기
+client.BrandTemplates.Delete(templateCode)     // 카카오에서도 삭제된다
+```
+
+### 발신번호 등록 신청
+
+```go
+// 계정 종류에 맞는 유형과 유형별 필수 서류
+client.SenderRegistration.NumberTypes()
+
+// 형식·중복 미리 확인
+check, _ := client.SenderRegistration.Validate("02-1234-5678", "team_main")
+
+csu, _ := os.Open("csu.pdf")
+defer csu.Close()
+
+created, err := client.SenderRegistration.Create(
+    sendgo.SenderRegistrationRequest{
+        SenderAlias:      "고객센터 대표번호",
+        SenderNumberType: "team_main", // personal_other / team_main / team_other_company
+        PhoneE164:        "02-1234-5678",
+        // check 의 duplicationReasonRequired 가 true 면 필수
+        // DuplicationReason: "부서별 분리 운영",
+    },
+    []sendgo.MultipartFile{
+        {FieldName: "csuCertificate", FileName: "csu.pdf", Content: csu},
+    },
+)
+
+// created["data"]["sender"]["status"] == "PENDING" — 운영자 승인 후 SUCCESS
+
+client.SenderRegistration.List()
+client.SenderRegistration.Update(senderKey, "새 이름", "")
+client.SenderRegistration.Delete(senderKey)
+```
+
+**휴대폰 유형도 API 로 접수할 수 있습니다.** 콘솔의 PASS 본인인증 대신
+신분증 사본(`identityDocument`)을 첨부하면 sendgo 운영자가 직접 확인합니다.
+이 경로로 접수된 건은 응답의 `identityVerificationMethod` 가 `document` 이고
+**자동 승인되지 않습니다** — 운영자 확인 전까지 `PENDING` 입니다.
+
+유형별 필수 서류는 `numberTypes()` 응답의 `requiredDocuments` 로 확인하세요.
+반려되면 `rejectionReason` 에 사유가 담깁니다.
+
+### 문자 템플릿
+
+```go
+client.MessageTemplates.Create(sendgo.MessageTemplateRequest{
+    MessageTranType:    "LMS",
+    MessageTranSubject: "주문 안내", // LMS·MMS 는 필수
+    MessageTranMsg:     "주문이 접수되었습니다.",
+})
+
+client.MessageTemplates.List(sendgo.MessageTemplateListQuery{MessageType: "LMS"})
+client.MessageTemplates.Update(templateKey, req)
+client.MessageTemplates.Delete(templateKey)
+```
+
+### 이벤트 웹훅 — 심사 결과를 밀어 받기
+
+```go
+created, _ := client.Webhook.Subscribe(sendgo.WebhookSubscriptionRequest{
+    URL:     "https://reseller.example.com/hooks/sendgo",
+    Enabled: true,
+})
+
+// 시크릿은 이 응답에서 한 번만 나온다. 즉시 저장한다.
+secret := created["data"].(map[string]any)["secret"]
+
+client.Webhook.Show()          // 구독 설정 + 마지막 전송 결과
+client.Webhook.Test()          // 배선 확인
+client.Webhook.Unsubscribe()
+```
+
+받는 쪽에서는 **원본 바이트**로 서명을 검증합니다.
+
+```go
+func handleWebhook(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+
+    if !sendgo.VerifyWebhookSignature(body, r.Header.Get("X-Sendgo-Signature"), secret) {
+        http.Error(w, "invalid signature", http.StatusUnauthorized)
+        return
+    }
+
+    var payload struct {
+        Event      string         `json:"event"`
+        DeliveryID string         `json:"deliveryId"`
+        Data       map[string]any `json:"data"`
+    }
+    _ = json.Unmarshal(body, &payload)
+
+    // 처리는 큐로. 여기서 오래 끌면 재시도가 쌓인다.
+    w.WriteHeader(http.StatusNoContent)
+}
+```
+
+이벤트 목록은 `sendgo.WebhookEvents` 로 확인할 수 있습니다.
+
+### 카카오 이미지 업로드
+
+브랜드메시지 템플릿의 `imageUrl` 은 **카카오가 호스팅하는 URL** 이어야 합니다.
+
+```go
+f, _ := os.Open("banner.jpg")
+defer f.Close()
+
+uploaded, _ := client.KakaoImages.Upload("default", sendgo.MultipartFile{
+    FileName: "banner.jpg",
+    Content:  f,
+})
+
+imageURL := uploaded["data"].(map[string]any)["imageUrl"].(string)
+
+client.KakaoImages.UploadMany("carousel_feed", slides)
+client.KakaoImages.Types()   // 유형별 필드·최대 개수
+```
+
+### 수신거부(080) 동기화
+
+```go
+// 증분만 가져간다. 하루 한 번이면 충분하다.
+client.RejectedNumbers.List(sendgo.RejectedNumberListQuery{Since: "2026-09-01", Count: 500})
+```
+
+---
+
 ## 변경 사항
+
+### 1.3.0 (2026-09-11)
+
+- **관리 API 추가** — 콘솔에서만 되던 등록·심사를 코드로 처리합니다.
+  `client.KakaoSenders`(채널 인증·등록·동기화, 브랜드메시지 M/N 신청),
+  `client.NoticeTemplates`(알림톡 템플릿 CRUD·검수 요청·승인 취소·휴면 해제),
+  `client.BrandTemplates`(브랜드메시지 템플릿 CRUD·동기화·가져오기),
+  `client.SenderRegistration`(발신번호 등록 신청·중복 확인·유형 안내),
+  `client.MessageTemplates`(문자 상용구 템플릿 CRUD).
+- `httpClient` 에 `put`·`patch`·`postMultipart` 를 추가했습니다.
+  서류 첨부와 이미지 템플릿은 JSON 으로 보낼 수 없습니다. `MultipartFile` 은
+  토큰 갱신 재시도를 위해 내용을 미리 버퍼링합니다 — `io.Reader` 는 한 번
+  소진되면 되감을 수 없어, 그러지 않으면 재시도가 빈 파일을 올립니다.
+- **휴대폰 발신번호도 API 로 접수됩니다.** 콘솔의 PASS 본인인증 대신
+  `identityDocument`(신분증 사본)를 첨부하면 sendgo 운영자가 확인합니다.
+  이 경로는 자동 승인되지 않고 항상 `PENDING` 으로 시작합니다.
+- **이벤트 웹훅** 추가 — 발신번호 승인, 알림톡 검수 결과, 채널 차단,
+  브랜드메시지 타겟팅 결과를 구독해 받습니다. 서명은 받은 원본 바이트로
+  검증합니다(SDK 에 검증 헬퍼 포함).
+- **카카오 이미지 업로드** 추가 — 브랜드메시지 템플릿의 `imageUrl` 은 카카오가
+  호스팅하는 URL 이어야 하는데, 그 URL 을 얻는 길이 콘솔에만 있었습니다.
+- **수신거부(080) 조회** 추가 — 자기 DB 의 수신 상태를 맞출 수 있습니다.
 
 ### 1.2.0 (2026-08-14)
 

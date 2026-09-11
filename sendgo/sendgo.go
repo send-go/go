@@ -29,6 +29,27 @@ type Client struct {
 	// ShortURL은 짧은 URL — 링크 단축과 클릭 반응 분석입니다. v2 전용.
 	ShortURL *ShortURLService
 	SMS      *SMSService
+
+	// ---------------------------------------------------- 관리 API (v2 전용)
+	// 콘솔에서만 되던 등록·심사. 발송과 달리 대부분 즉시 완료되지 않습니다 —
+	// 등록 성공은 "접수됨"이지 "사용 가능"이 아닙니다.
+
+	// KakaoSenders는 카카오 발신프로필(채널) 등록·동기화입니다. 기업 계정 전용.
+	KakaoSenders *KakaoSenderService
+	// NoticeTemplates는 알림톡 템플릿 등록·수정·검수 요청입니다. 기업 계정 전용.
+	NoticeTemplates *NoticeTemplateService
+	// BrandTemplates는 브랜드메시지(구 친구톡) 템플릿 관리입니다. 기업 계정 전용.
+	BrandTemplates *BrandTemplateService
+	// SenderRegistration은 발신번호 등록·심사 접수입니다.
+	SenderRegistration *SenderRegistrationService
+	// MessageTemplates는 문자 상용구 템플릿입니다.
+	MessageTemplates *MessageTemplateService
+	// KakaoImages는 카카오 이미지 업로드입니다. 기업 계정 전용.
+	KakaoImages *KakaoImageService
+	// RejectedNumbers는 수신거부(080) 번호 조회입니다.
+	RejectedNumbers *RejectedNumberService
+	// Webhook은 이벤트 웹훅 구독입니다 — 등록·심사 결과를 밀어 받습니다.
+	Webhook *WebhookService
 }
 
 // New는 새 Sendgo 클라이언트를 생성합니다.
@@ -52,5 +73,14 @@ func New(cfg Config) (*Client, error) {
 		BrandMessage: newBrandMessageService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
 		ShortURL:     newShortURLService(hc),
 		SMS:          newSMSService(hc, cfg.SmsSenderKey),
+
+		KakaoSenders:       newKakaoSenderService(hc),
+		NoticeTemplates:    newNoticeTemplateService(hc),
+		BrandTemplates:     newBrandTemplateService(hc),
+		SenderRegistration: newSenderRegistrationService(hc),
+		MessageTemplates:   newMessageTemplateService(hc),
+		KakaoImages:        newKakaoImageService(hc),
+		RejectedNumbers:    newRejectedNumberService(hc),
+		Webhook:            newWebhookService(hc),
 	}, nil
 }

@@ -115,3 +115,127 @@ func main() {
 		}
 	}
 }
+
+// managementApi compiles the 1.3.0 관리 API surface used by the guides.
+//
+// 등록·심사는 발송과 달리 즉시 완료되지 않는다. 카카오 채널 인증번호와
+// 휴대폰 발신번호 본인인증은 사람이 개입해야 하므로 여기서도 트리거까지만 쓴다.
+func managementApi(client *sendgo.Client) {
+	// --- 카카오 채널 등록 (2단계) ---
+	_, _ = client.KakaoSenders.RequestToken("@my-channel", "01012345678")
+
+	created, err := client.KakaoSenders.Create(sendgo.KakaoSenderCreateRequest{
+		Token:        "123456",
+		YellowID:     "@my-channel",
+		PhoneNumber:  "01012345678",
+		CategoryCode: "001001",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sender := created["data"].(map[string]any)["sender"].(map[string]any)
+	kakaoSenderKey := sender["kakaoSenderKey"].(string)
+
+	_, _ = client.KakaoSenders.Categories("")
+	_, _ = client.KakaoSenders.List()
+	_, _ = client.KakaoSenders.Sync("")
+	_, _ = client.KakaoSenders.Sync(kakaoSenderKey)
+	_, _ = client.KakaoSenders.ApplyBrandMessageTargeting(kakaoSenderKey, "N")
+
+	// --- 알림톡 템플릿 등록 → 검수 요청 → 폴링 ---
+	template, err := client.NoticeTemplates.Create(sendgo.NoticeTemplateRequest{
+		KakaoSenderKey:        kakaoSenderKey,
+		TemplateName:          "주문 접수 안내",
+		TemplateContent:       "#{name}님, 주문 #{orderNo}이 접수되었습니다.",
+		TemplateMessageType:   "BA",
+		TemplateEmphasizeType: "NONE",
+		CategoryCode:          "001001",
+		MessagePurpose:        "order_delivery",
+		LegalBasis:            "transaction",
+		BenefitOrigin:         "none",
+		ExpiryType:            "none",
+		OptInReviewConfirmed:  true,
+		CtaClearConfirmed:     true,
+		PolicyConfirmed:       true,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	templateCode := template["data"].(map[string]any)["template"].(map[string]any)["templateCode"].(string)
+
+	_, _ = client.NoticeTemplates.RequestInspection(templateCode, "", nil)
+	_, _ = client.NoticeTemplates.Sync(templateCode)
+	_, _ = client.NoticeTemplates.List(sendgo.NoticeTemplateListQuery{
+		KakaoSenderKey:   kakaoSenderKey,
+		InspectionStatus: "APR",
+	})
+	_, _ = client.NoticeTemplates.CancelInspection(templateCode)
+	_, _ = client.NoticeTemplates.Release(templateCode)
+	_, _ = client.NoticeTemplates.Delete(templateCode)
+
+	// --- 이미지 템플릿 / 검수 첨부 (multipart) ---
+	image, err := os.Open("banner.jpg")
+	if err == nil {
+		defer image.Close()
+		_, _ = client.NoticeTemplates.CreateWithImage(
+			sendgo.NoticeTemplateRequest{
+				KakaoSenderKey:        kakaoSenderKey,
+				TemplateName:          "이벤트 안내",
+				TemplateContent:       "#{name}님께 드리는 안내입니다.",
+				TemplateEmphasizeType: "IMAGE",
+				CategoryCode:          "001001",
+				MessagePurpose:        "service_ops",
+				LegalBasis:            "transaction",
+				BenefitOrigin:         "none",
+				ExpiryType:            "none",
+				OptInReviewConfirmed:  true,
+				CtaClearConfirmed:     true,
+				PolicyConfirmed:       true,
+			},
+			sendgo.MultipartFile{FileName: "banner.jpg", Content: image},
+		)
+	}
+
+	// --- 브랜드메시지 템플릿 ---
+	_, _ = client.BrandTemplates.Create(sendgo.BrandTemplateRequest{
+		KakaoSenderKey:  kakaoSenderKey,
+		TemplateName:    "여름 세일 안내",
+		TemplateType:    "FI",
+		TemplateContent: "여름 세일이 시작되었습니다.",
+		ImageURL:        "https://mud-kage.kakao.com/example.jpg",
+	})
+	_, _ = client.BrandTemplates.List(sendgo.BrandTemplateListQuery{KakaoSenderKey: kakaoSenderKey})
+	_, _ = client.BrandTemplates.Import(kakaoSenderKey)
+
+	// --- 발신번호 등록 신청 ---
+	_, _ = client.SenderRegistration.NumberTypes()
+	_, _ = client.SenderRegistration.Validate("02-1234-5678", "team_main")
+
+	csu, err := os.Open("csu.pdf")
+	if err == nil {
+		defer csu.Close()
+		_, _ = client.SenderRegistration.Create(
+			sendgo.SenderRegistrationRequest{
+				SenderAlias:      "고객센터 대표번호",
+				SenderNumberType: "team_main",
+				PhoneE164:        "02-1234-5678",
+			},
+			[]sendgo.MultipartFile{
+				{FieldName: "csuCertificate", FileName: "csu.pdf", Content: csu},
+			},
+		)
+	}
+
+	_, _ = client.SenderRegistration.List()
+	_, _ = client.SenderRegistration.Update("sender-key", "새 이름", "")
+
+	// --- 문자 상용구 템플릿 ---
+	_, _ = client.MessageTemplates.Create(sendgo.MessageTemplateRequest{
+		MessageTranType:    "LMS",
+		MessageTranSubject: "주문 안내",
+		MessageTranMsg:     "주문이 접수되었습니다.",
+	})
+	_, _ = client.MessageTemplates.List(sendgo.MessageTemplateListQuery{MessageType: "LMS"})
+}
