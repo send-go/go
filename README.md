@@ -748,3 +748,29 @@ MIT License © 2026 [Sendgo](https://sendgo.io)
 ---
 
 *키워드: 카카오 알림톡 Go, 카카오 친구톡 Golang, SMS 발송 Go, 알림톡 Go SDK, Go 카카오 API 연동, Sendgo Go SDK, Golang 알림 발송*
+
+## 계정·조직·API 키 관리 (1.4.0)
+
+발송용 `accessKey`/`secretKey`가 없는 단계에서 사용하는 **별도 계정 클라이언트**입니다.
+콘솔에서 발급받은 에이전트 토큰(`SENDGO_AGENT_TOKEN`)으로 `/api/v2/account`를 호출합니다.
+계정 조회에는 `account:read`, 키·허용 IP 변경에는 `keys:write` 권한이 필요합니다.
+토큰 만료나 권한 부족(401/403)은 그대로 예외로 반환하며 자동 갱신·재시도하지 않습니다.
+
+조직 선택은 서버에 저장되는 **사용자 계정의 현재 조직**을 바꿉니다. 같은 사용자로
+여러 조직의 설정을 동시에 변경하지 마세요. 개인 계정으로 돌아가려면 조직 ID에
+`null`(Python `None`, Ruby `nil`, Go `nil`) 또는 `personal`을 전달합니다.
+키 발급 응답의 `data.apiKey.secretKey`는 한 번만 반환되므로 서버의 비밀 저장소에 보관하세요.
+허용 IP가 하나라도 등록되면 목록 밖의 IP는 차단됩니다.
+에이전트 토큰과 키는 브라우저·모바일 앱에 포함하거나 응답·로그에 출력하지 않습니다.
+
+```go
+account, err := sendgo.NewAccount(os.Getenv("SENDGO_AGENT_TOKEN"), "")
+if err != nil { log.Fatal(err) }
+result, err := account.Me()
+if err != nil { log.Fatal(err) }
+_ = result
+```
+
+지원 메서드: `Me`, `Organizations`, `SelectOrganization`, `ApiKeys`, `CreateApiKey`, `ApiKey`, `UpdateApiKey`, `DeleteApiKey`, `IssueToken`, `AllowedIps`, `AddAllowedIp`, `DeleteAllowedIp`.
+
+키 생성 인자는 `name`, 선택적 `ipAddresses: [{ip, description}]`이며, 허용 IP 추가 인자는 `ip`, 선택적 `description`입니다. 키·IP 식별자는 응답의 `id`(UUID)를 사용합니다.
