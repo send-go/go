@@ -47,6 +47,8 @@ type KakaoSenderCreateRequest struct {
 // 뒤쪽 정책 필드 일곱 개는 sendgo 자체 게이트입니다. 카카오 심사와 별개이며
 // 조합이 본문과 어긋나면 POLICY_VALIDATION_FAILED로 거절됩니다.
 type NoticeTemplateRequest struct {
+	// 등록 시 폴더 지정. 이동은 TemplateFolders.Assign을 사용합니다.
+	FolderUUID     string `json:"folderUuid,omitempty"`
 	KakaoSenderKey string `json:"kakaoSenderKey,omitempty"`
 	TemplateName   string `json:"templateName"`
 	// TemplateContent의 변수는 #{name} 형식으로 씁니다.
@@ -90,6 +92,8 @@ type NoticeTemplateRequest struct {
 
 // NoticeTemplateListQuery는 알림톡 템플릿 목록 조회 조건입니다.
 type NoticeTemplateListQuery struct {
+	// none이면 미분류 템플릿만 조회합니다.
+	FolderUUID     string
 	KakaoSenderKey string
 	// InspectionStatus: REG / REQ / APR / REJ / BLOCK / DORMANT.
 	InspectionStatus string
@@ -99,6 +103,9 @@ type NoticeTemplateListQuery struct {
 
 func (q NoticeTemplateListQuery) toMap() map[string]string {
 	m := map[string]string{}
+	if q.FolderUUID != "" {
+		m["folderUuid"] = q.FolderUUID
+	}
 	if q.KakaoSenderKey != "" {
 		m["kakaoSenderKey"] = q.KakaoSenderKey
 	}
@@ -119,6 +126,8 @@ func (q NoticeTemplateListQuery) toMap() map[string]string {
 // TemplateType은 친구톡 표기(FT/FI/FW/FL/FC/FM/FP/FA)를 그대로 씁니다 —
 // 서버가 chatBubbleType으로 변환합니다.
 type BrandTemplateRequest struct {
+	// 등록 시 폴더 지정. 이동은 TemplateFolders.Assign을 사용합니다.
+	FolderUUID        string           `json:"folderUuid,omitempty"`
 	KakaoSenderKey    string           `json:"kakaoSenderKey,omitempty"`
 	TemplateName      string           `json:"templateName"`
 	TemplateType      string           `json:"templateType"`
@@ -142,6 +151,8 @@ type BrandTemplateRequest struct {
 
 // BrandTemplateListQuery는 브랜드메시지 템플릿 목록 조회 조건입니다.
 type BrandTemplateListQuery struct {
+	// none이면 미분류 템플릿만 조회합니다.
+	FolderUUID     string
 	KakaoSenderKey string
 	Search         string
 	Count          int
@@ -149,6 +160,9 @@ type BrandTemplateListQuery struct {
 
 func (q BrandTemplateListQuery) toMap() map[string]string {
 	m := map[string]string{}
+	if q.FolderUUID != "" {
+		m["folderUuid"] = q.FolderUUID
+	}
 	if q.KakaoSenderKey != "" {
 		m["kakaoSenderKey"] = q.KakaoSenderKey
 	}

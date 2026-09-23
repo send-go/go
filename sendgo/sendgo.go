@@ -21,7 +21,8 @@ import "fmt"
 
 // Client는 Sendgo API 클라이언트입니다.
 type Client struct {
-	Alimtalk *AlimtalkService
+	TemplateFolders *TemplateFolderService
+	Alimtalk        *AlimtalkService
 	// Deprecated: 친구톡은 2025-12-31 종료. BrandMessage를 사용하세요.
 	Friendtalk *FriendtalkService
 	// BrandMessage는 카카오 브랜드메시지(친구톡의 후속 채널)입니다. v2 전용.
@@ -68,11 +69,12 @@ func New(cfg Config) (*Client, error) {
 	hc := newHTTPClient(tm, cfg.BaseURL, cfg.APIVersion)
 
 	return &Client{
-		Alimtalk:     newAlimtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
-		Friendtalk:   newFriendtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
-		BrandMessage: newBrandMessageService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
-		ShortURL:     newShortURLService(hc),
-		SMS:          newSMSService(hc, cfg.SmsSenderKey),
+		TemplateFolders: &TemplateFolderService{http: hc},
+		Alimtalk:        newAlimtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		Friendtalk:      newFriendtalkService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		BrandMessage:    newBrandMessageService(hc, cfg.KakaoSenderKey, cfg.SmsSenderKey),
+		ShortURL:        newShortURLService(hc),
+		SMS:             newSMSService(hc, cfg.SmsSenderKey),
 
 		KakaoSenders:       newKakaoSenderService(hc),
 		NoticeTemplates:    newNoticeTemplateService(hc),
